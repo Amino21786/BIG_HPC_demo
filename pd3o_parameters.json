@@ -1,0 +1,8 @@
+[
+    {
+        "algorithm": "pd3o",
+        "initialisation": ["data-zeros"],
+        "alpha": [1e-4],
+        "max_iter": [10]
+    }
+]
