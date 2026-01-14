@@ -1,0 +1,8 @@
+[
+    {
+        "name": ["patrick"],
+        "algorithm": "gradient_descent",
+        "stepsize": [1e-2],
+        "max_iter": [10, 20]
+    }
+]

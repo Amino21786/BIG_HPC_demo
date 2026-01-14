@@ -1,13 +1,14 @@
-import os
-import json
-import torch
-import numpy as np
 from pathlib import Path
-from datetime import datetime
+#from tqdm import tqdm
+import json
+import scipy
+import numpy as np
 
+from skimage.data import shepp_logan_phantom
+from skimage.transform import resize
 
+"""
 def to_jsonable(obj):
-    """Convert nested tensors/arrays to JSON-serializable structures."""
     if isinstance(obj, torch.Tensor):
         return obj.detach().cpu().numpy()
     if isinstance(obj, np.ndarray):
@@ -17,225 +18,87 @@ def to_jsonable(obj):
     if isinstance(obj, (list, tuple)):
         return [to_jsonable(v) for v in obj]
     return obj
+"""
 
-def initialisations(choice = "zeros-zeros", data_input=None, problem=None):
-    """Function to create initialisations based on choice string."""
-    hterms = [t for t in problem if t.type == "h"]
-    
-    if choice == "zeros-zeros":
-        x0 = 0*torch.stack([data_input, data_input])
-        y0 = [0*term.A(x0) for term in hterms]
-        return x0, y0
-    elif choice == "data-zeros":
-        x0 = torch.stack([data_input, data_input])
-        y0 = [0*term.A(x0) for term in hterms]
-        return x0, y0
+def gradient_descent(noisy_image, original_image, stepsize, max_iter):
+    """Simple gradient descent for image denoising."""
+    # Initialize the denoised image
+    denoised_image = noisy_image.copy()
+    rel_errors = []
+    for i in range(max_iter): #tqdm(range(max_iter), desc="Gradient Descent"):
+        # Compute the gradient (identity operator with noise
+        gradient = denoised_image - noisy_image
+        # Update the denoised image
+        denoised_image -= stepsize * gradient
+        # Compute relative error
+        rel_error = np.linalg.norm(denoised_image - original_image) / np.linalg.norm(original_image)
+        rel_errors.append(rel_error)
+        print(f"Iteration {i+1}/{max_iter}, Relative Error: {rel_error:.6f}")
 
-def discrepancy_principle(data, alpha_info, noise='mixed'):
-    """
-    Function to compute the discrepancies for Gaussian and Poisson terms
-    Args:
-        data: measured data tensor
-        info: info dictionary from optimization
+    return denoised_image, rel_errors
 
-    Returns:
-        gauss_disc: float
-        poisson_disc: float
-    """
-    
-    n_pixels = data.numel()
-    # print the different components of Cost from info
-    print(f"Cost components: {alpha_info['Cost'][0]}")
-    # last cost values
-    print(f"Final Cost components: {alpha_info['Cost'][-1]}")
-    #return True
-    if noise == 'mixed':
-        final_gaussian_cost = alpha_info['Cost'][-1][1]  # Assuming Gaussian term is the second term
-        final_poisson_cost = alpha_info['Cost'][-1][2]  # Assuming Poisson term is the third term
-    elif noise == 'gaussian':
-        final_gaussian_cost = alpha_info['Cost'][-1][1]
-        final_poisson_cost = 0.0
-    elif noise == 'poisson':
-        final_gaussian_cost = 0.0
-        final_poisson_cost = alpha_info['Cost'][-1][1]
-
-    gaussian_discrepancy = final_gaussian_cost / (n_pixels)
-    poisson_discrepancy = final_poisson_cost / (n_pixels)
-    print(f"Final Gaussian Cost: {final_gaussian_cost:.4f}, Gaussian Discrepancy: {gaussian_discrepancy:.4f}")
-    print(f"Final Poisson Cost: {final_poisson_cost:.4f}, Poisson Discrepancy: {poisson_discrepancy:.4f}")
-
-    return gaussian_discrepancy.item(), poisson_discrepancy.item()
 
 def process(**kwargs):
-    # -------------------------------------------
-    # Setup device
-    # -------------------------------------------
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"Running on device: {device}")
+   
 
     # Experiment index for naming
     exp_id = kwargs.get("index", 0)
+    experiment_name = kwargs.get("name", "experiment")
+    algorithm_name = kwargs.get("algorithm", "gradient_descent")
+    stepsize = kwargs.get("stepsize", 1e-2)
+    max_iter = kwargs.get("max_iter", 10)
 
-    algorithm_name = kwargs.get("algorithm", "pd3o-alphas") 
-
-    # Create output directory: results/<algorithm>/exp_XXX/
-    outdir = Path(f"results/{algorithm_name}/exp_{exp_id:03d}")
+    # Creating output directory:
+    outdir = Path(f"results/{experiment_name}/{algorithm_name}/exp_{exp_id:03d}")
     outdir.mkdir(parents=True, exist_ok=True)
     print(f"Saving outputs to: {outdir}")
 
     # -------------------------------------------
-    # Print experiment parameters
-    # -------------------------------------------
-    print("Parameters:")
-    for k, v in kwargs.items():
-        print(f"  {k}: {v}")
-
-    # Taken from the JSON parameters (algorithm parameters)
-    # starting alpha and gamma (2e-4, 100)
-    alpha_ref = 2e-4
-    gamma_ref = kwargs.get("gamma_ref", 100)
-    alpha = kwargs.get("alpha", 2e-4)
-    max_iter = kwargs.get("max_iter", 10)
-    initialisations_choice = kwargs.get("initialisation", "zeros-zeros")
-    tau = kwargs.get("tau", 10)
-
-    gamma = gamma_ref * (alpha_ref / alpha)
-    sigma = tau / gamma
+    # Running of experiment for image denoising of the Shepp-Logan phantom
+    phantom = shepp_logan_phantom()
+    image = resize(phantom, (128, 128), mode='reflect', anti_aliasing=True)
+    noisy_image = image + 0.1 * np.random.randn(*image.shape)
     
-    print(f"PD3O stepsizes for alpha={alpha}: tau={tau}, sigma={sigma}, gamma={gamma}")
+
+    print("Running the denoising algorithm...")
+    if algorithm_name == "gradient_descent":
+        denoised_image, rel_errors = gradient_descent(
+            noisy_image,
+            image,
+            stepsize,
+            max_iter
+        )
+    else:
+        raise ValueError(f"Unknown algorithm: {algorithm_name}")
     
-    """
-    # Algorithm parameters for each experiment
-    alpha = kwargs.get("alpha", 2e-4)
-    gamma = gamma_ref * (alpha_ref / alpha)**2
-    rho = kwargs.get("rho", 1)
-    max_iter = kwargs.get("max_iter", 10)
-    initialisations_choice = kwargs.get("initialisation", "zeros-zeros")
-    c = 1 #1/op_norm(M) #M the forward operator for Widefield is 1
-    tau = np.sqrt(gamma*rho)*c 
-    sigma = c*np.sqrt(rho/gamma) #c/sqrt(gamma*rho)
-    print(f"Gamma: {gamma}, Alpha: {alpha}, Tau: {tau}, Sigma: {sigma}")
-    """
-  
-
+    print("Denoising  algorithm completed.")
+   
     # -------------------------------------------
-    # Load data and setup operators
+    # SAVE results as a numpy compressed file
     # -------------------------------------------
-    from pylsdeconv.generation import generate_fibers, generate_sensor_noise
-    from pylsdeconv.microscopy import Widefield
-    from pylsdeconv.optimization import algorithm, cost, metrics, operator, function
-    from pylsdeconv.pnp import unet, denoiser
-    
-    model = unet.load_model("models/tmp.pth").to(device)
-  
-    sigman = 30
-
-    # values for the first set of ground truth and measurement
-    #shape = [16, 128, 128]
-    #spacing = [200, 100, 100]
-    #readout = 5
-    
-    shape = [32, 96, 96]
-    spacing = [100, 65, 65]
-    readout = 1.7 # Gaussian readout noise level from the electronic circuit
-
-    # Define forward microscopy operator and load data
-    op = Widefield(shape, spacing, 500, 1.0, 1.3, device=device)
-    # op = LightSheet(shape, spacing, 500, 520, 0.75, 1.2, 1.33, device=device)
-    
-    img = torch.load("data/ground_truth_setting.pt").to(device)
-    data = torch.load("data/measurement_setting.pt").to(device)
-    #data = torch.load("data/fibres_lsmmeasurement.pt").to(device)
-    # data = generate_sensor_noise(op(img), 1, 0, 5) # new poisson and gaussian noise added each time
-
-
-    # -------------------------------------------
-    # Define cost function
-    # -------------------------------------------
-    J = [
-       cost.LSRTerm(
-        denoiser.ResDen(model, sigman),
-        alpha=alpha,
-        op = operator.Stack([[operator.Identity(), operator.Null()]]),
-        type="f",   
-    ),
-        cost.Term(
-            fun=function.SSEStackNonNegative(factor=0.5 / (readout**2), data=data),
-            type="g",
-        ),
-        cost.Term(
-            function.KLD2(),
-            operator.Stack([[op, operator.Null()],
-                            [operator.Null(), operator.Identity()]]),
-            "h",
-        ),
-    ]
-
-    perf = {
-        "MSE": metrics.MSE(
-            img, op=operator.Stack([[operator.Identity(), operator.Null()]])
-        ),
-        "RelMSE": metrics.RelMSE(
-            img, op=operator.Stack([[operator.Identity(), operator.Null()]])
-        ),
-        "DKL0": metrics.KLD(data, operator.Stack([[op, operator.Null()]]), 0.1),
-        "Cost": metrics.Cost(J),
-        "Time": metrics.Chronograph(),
-        #"Iterates": ,
-    }
-
-    # Setup of parameters and initialisation for primal and dual variables
-    params = { "tau": tau,  "max_iter": max_iter, "sigma": sigma}
-    x0, y0 = initialisations(initialisations_choice, data_input=data, problem=J)
-
-    # -------------------------------------------
-    # Run PD3O algorithm
-    # -------------------------------------------
-    rec, _, info = algorithm.pd3o(J, x0, y0, **params, metrics=perf)
-    # -------------------------------------------
-    # Print final metrics
-    # -------------------------------------------
-
-    # print all the info metrics apart from 'iterates'
-    for key, values in info.items():
-        if key != "iterates":
-            print(f"  {key}: {values[-1]}")
-
-    # discrepancy principle value at final iteration
-    gaussian_disc, poisson_disc = discrepancy_principle(data, info, noise='mixed')
-    discrepancies = np.array([gaussian_disc, poisson_disc])
-
-    # -------------------------------------------
-    # SAVE results (rec, dual_rec, info, params, discrepancies) as a numpy compressed file
-    # -------------------------------------------
-    #gamma_rounded to 2 significant figures
-    print("Saving rec + dual_rec into a single compressed file...")
-    rec_dual_path = outdir / f"rec_dual_{initialisations_choice}_gamma_{gamma:.1f}_alpha_{alpha}.npz"
+    print("Saving results into a single compressed file...")
+    results_path = outdir / f"{algorithm_name}_results.npz"
 
     np.savez_compressed(
-        rec_dual_path,
-        rec=rec.detach().cpu().numpy()
+        results_path,
+        results=denoised_image,
+        rel_errors=rel_errors
         #dual=torch.stack(dual_rec).detach().cpu().numpy()
     )
 
+
+    """
     print("Saving info dictionary...")
     info_np = to_jsonable(info)
     np.savez_compressed(
         outdir / f"info_{initialisations_choice}_gamma_{gamma:.1f}_alpha_{alpha}.npz",
         info=np.array(info_np, dtype=object)
     )
+    """
+   
+ 
 
-    print("Saving parameter dictionary...")
-    with open(outdir / "params.json", "w") as f:
-        json.dump(to_jsonable(kwargs), f, indent=4)
-
-    print("Saving discrepancies...")
-    np.savez_compressed(
-        outdir / f"discrepancies_{initialisations_choice}_gamma_{gamma:.1f}_alpha_{alpha}.npz",
-        discrepancies=discrepancies
-    )
-
-    print("Done.")
+    print("Experiment done.")
 
 
 

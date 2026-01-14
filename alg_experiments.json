@@ -1,0 +1,14 @@
+[
+    {
+        "algorithm": "gradient_descent",
+        "name": "example",
+        "stepsize": 0.01,
+        "max_iter": 10
+    },
+    {
+        "algorithm": "gradient_descent",
+        "name": "example",
+        "stepsize": 0.01,
+        "max_iter": 20
+    }
+]

@@ -21,29 +21,32 @@ def save_slurm_script(path: Path, ntasks: int, experiment_path: Path):
         Path to the experiments list JSON file.
     """
 
-    ## to be edited
     with open(path, "w") as txt:
         txt.write("#!/bin/bash\n")
-        txt.write("#SBATCH --account=EB-MA3194M-019\n") 
-        txt.write("#SBATCH --partition=spot-ncv3-6\n") # type of instance (spot, paygo on CPU or GPU)
-        txt.write("#SBATCH --qos=spot-ncv3-6\n") # cpu or gpu instance 
-        txt.write("#SBATCH --job-name=name_test_exp\n")
+        txt.write("#SBATCH --account=EB-MA3194M-019\n")
+        txt.write("#SBATCH --partition=spot-hbv2-120\n")
+        txt.write("#SBATCH --qos=spot-hbv2-120\n")
+        txt.write("#SBATCH --job-name=hbv2_demo\n")
         txt.write("#SBATCH --output=logs/name_test_exp/test_exp_%A_%a.out\n")
         txt.write("#SBATCH --error=logs/name_test_exp/test_exp_%A_%a.err\n")
         txt.write("#SBATCH --nodes=1\n")
-        txt.write("#SBATCH --gres=gpu:1\n") # gpu or cpu
+        txt.write("#SBATCH --cpus-per-task=16\n")
         txt.write("#SBATCH --time=00:05:00\n")
-        txt.write("#SBATCH --cpus-per-task=1\n")
         txt.write(f"#SBATCH --array=0-{ntasks-1}\n\n")
 
-        # setup to load modules and virtual environment (Python, CUDA)
+        # Environment setup
         txt.write("module purge\n")
         txt.write("source /apps/build/easy_build/scripts/id_instance.sh\n")
         txt.write("source /apps/build/easy_build/scripts/setup_modules.sh\n")
         txt.write("module load Python/3.11.3-GCCcore-12.3.0\n")
-        txt.write("module load CUDA/12.1.1\n")
-        txt.write("source /campaign/EB-MA3194M-019/big-venv-gpu/bin/activate\n\n") #starts virtual environment in the HPC
+        txt.write("source /campaign/EB-MA3194M-019/big-venv-gpu/bin/activate\n\n")
 
+        # Threading (important for HB CPUs)
+        txt.write("export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK\n")
+        txt.write("export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK\n")
+        txt.write("export OPENBLAS_NUM_THREADS=$SLURM_CPUS_PER_TASK\n\n")
+
+        # Run experiment
         txt.write(
             f"python run_experiment.py run --experiment {experiment_path} --index $SLURM_ARRAY_TASK_ID\n"
         )
