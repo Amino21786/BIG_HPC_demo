@@ -42,7 +42,7 @@ def save_slurm_script(path: Path, ntasks: int, experiment_path: Path):
         txt.write("source /apps/build/easy_build/scripts/setup_modules.sh\n")
         txt.write("module load Python/3.11.3-GCCcore-12.3.0\n")
         txt.write("module load CUDA/12.1.1\n")
-        txt.write("source /campaign/EB-MA3194M-019/test-venv-gpu/bin/activate\n\n") #starts virtual environment in the HPC
+        txt.write("source /campaign/EB-MA3194M-019/big-venv-gpu/bin/activate\n\n") #starts virtual environment in the HPC
 
         txt.write(
             f"python run_experiment.py run --experiment {experiment_path} --index $SLURM_ARRAY_TASK_ID\n"
