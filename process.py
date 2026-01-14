@@ -4,8 +4,8 @@ import json
 import scipy
 import numpy as np
 
-from skimage.data import shepp_logan_phantom
-from skimage.transform import resize
+from scikit_image.data import shepp_logan_phantom
+from scikit_image.transform import resize
 
 """
 def to_jsonable(obj):
