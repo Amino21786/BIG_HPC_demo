@@ -13,7 +13,7 @@ Folders all named for your use.
 # Steps to get into the right HPC cluster:
 
 ## On Command line (terminal/powershell etc):
-1) Sign into Nimbus on the command line with 'ssh bath_username@nimbus.hpc.ac.uk'
+1) Sign into Nimbus on the command line with 'ssh bath_username@nimbus.hpc.bath.ac.uk'
 2) Navigate to the right directory:
 ```
 cd /campaign/EB-MA3194M-019/BIG_HPC_demo
@@ -32,8 +32,8 @@ source /campaign/EB-MA3194M-019/big-venv-gpu/bin/activate
 ```
 
 # Running of run_experiment.py and process.py
-1) In the terminal can run (creates a .sh script with the SLURM features to build the HPC job for a certain simulation)
-- Simple Matrix-vector multipliction script:
+1) In the terminal, run (creates a .sh script with the SLURM features to build the HPC job for a certain simulation)
+- Simple Matrix-vector multiplication script:
 ```
   python simple_run_experiment.py configure --parameters alg_parameters.json --experiment alg_experiments.json --script simple_run.sh
 ```
